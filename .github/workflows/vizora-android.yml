@@ -147,6 +147,8 @@ jobs:
           sed -i 's|applicationId "com.carriez.flutter_hbb"|applicationId "com.vizora.remote"|' flutter/android/app/build.gradle
           sed -i 's|android:label="RustDesk"|android:label="VIZORA Remote"|' flutter/android/app/src/main/AndroidManifest.xml
           grep -q 'com.vizora.remote' flutter/android/app/build.gradle || { echo "applicationId not replaced"; exit 1; }
+          # password handed over by the VIZORA app, and the ID reported back to it
+          python3 vizora/patch.py
 
       - name: Install flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
