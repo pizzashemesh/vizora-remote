@@ -106,9 +106,11 @@ patch(KT, '    override fun onResume() {\n', r'''    // VIZORA: the same handove
                 else -> p.edit().remove("vz_setup").remove("vz_step").apply()
             }
         } catch (e: Exception) {
+            // this device has no such settings screen (some makers remove them): on to the next step
             Log.w("VIZORA", "setup step $step: ${e.message}")
             vzBusy = false
             next(step + 1)
+            window.decorView.postDelayed({ vzSetup() }, 300)
         }
     }
 
