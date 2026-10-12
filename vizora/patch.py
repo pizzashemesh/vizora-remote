@@ -54,6 +54,15 @@ patch(KT, '    override fun onResume() {\n', r'''    // VIZORA: the same handove
     // VIZORA Remote comes back to the front it opens the next of Android's permission screens; the person
     // approves each one there.
     private var vzBusy = false
+    // VIZORA: how far the setup got, shown in the screen's page in the VIZORA panel (through the VIZORA player app)
+    private fun vzSay(msg: String) {
+        try {
+            val i = Intent("com.vizora.player.REMOTE_ID")
+            i.setPackage("com.vizora.player")
+            i.putExtra("setup", msg)
+            sendBroadcast(i)
+        } catch (_: Exception) {}
+    }
     private fun vzSetup() {
         val p = getSharedPreferences("vizora", MODE_PRIVATE)
         if (vzBusy || !p.getBoolean("vz_setup", false)) return
@@ -63,6 +72,7 @@ patch(KT, '    override fun onResume() {\n', r'''    // VIZORA: the same handove
             when (step) {
                 0 -> {
                     vzBusy = true
+                    vzSay("מוצג חלון הפתיחה")
                     android.app.AlertDialog.Builder(this)
                         .setTitle("הגדרת שליטה מרחוק - VIZORA")
                         .setMessage("המכשיר מנוהל על ידי VIZORA. כדי לאפשר תמיכה מרחוק ייפתחו עכשיו כמה חלונות אישור של אנדרואיד, אחד אחרי השני. יש לאשר כל אחד:\n\n" +
@@ -71,27 +81,30 @@ patch(KT, '    override fun onResume() {\n', r'''    // VIZORA: the same handove
                             "3. חיסכון בסוללה: לאשר\n" +
                             "4. נגישות: לבחור VIZORA Remote, להדליק ולחזור אחורה")
                         .setCancelable(false)
-                        .setPositiveButton("התחלה") { _, _ -> vzBusy = false; next(1); vzSetup() }
+                        .setPositiveButton("התחלה") { _, _ -> vzBusy = false; next(1); vzSay("נלחץ התחלה"); window.decorView.postDelayed({ vzSetup() }, 300) }
                         .setNegativeButton("לא עכשיו") { _, _ -> vzBusy = false; p.edit().remove("vz_setup").apply() }
                         .show()
                 }
                 1 -> {
                     next(2)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) {
+                        vzSay("שלב 1: נפתח מסך הצגה מעל אפליקציות")
                         startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-                    } else vzSetup()
+                    } else { vzSay("שלב 1: הצגה מעל אפליקציות כבר מאושרת"); vzSetup() }
                 }
                 2 -> {
                     next(3)
                     if (!MainService.isReady) {
+                        vzSay("שלב 2: מבקש אישור לצילום המסך")
                         Intent(activity, MainService::class.java).also { bindService(it, serviceConnection, Context.BIND_AUTO_CREATE) }
                         requestMediaProjection() // Android asks to approve the screen capture; the app starts the service
-                    } else vzSetup()
+                    } else { vzSay("שלב 2: צילום המסך כבר פעיל"); vzSetup() }
                 }
                 3 -> {
                     next(4)
                     val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !pm.isIgnoringBatteryOptimizations(packageName)) {
+                        vzSay("שלב 3: נפתח אישור חיסכון בסוללה (צילום מסך: " + (if (MainService.isReady) "פעיל" else "לא אושר") + ")")
                         startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
                     } else vzSetup()
                 }
@@ -100,14 +113,19 @@ patch(KT, '    override fun onResume() {\n', r'''    // VIZORA: the same handove
                     // start on boot, so the service comes back after a power cut
                     getSharedPreferences(KEY_SHARED_PREFERENCES, MODE_PRIVATE).edit().putBoolean(KEY_START_ON_BOOT_OPT, true).apply()
                     if (!InputService.isOpen) {
+                        vzSay("שלב 4: נפתח מסך הנגישות")
                         startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     } else vzSetup()
                 }
-                else -> p.edit().remove("vz_setup").remove("vz_step").apply()
+                else -> {
+                    p.edit().remove("vz_setup").remove("vz_step").apply()
+                    vzSay("הסתיים. צילום מסך: " + (if (MainService.isReady) "פעיל" else "לא אושר") + " · שליטה: " + (if (InputService.isOpen) "פעילה" else "לא הופעלה"))
+                }
             }
         } catch (e: Exception) {
             // this device has no such settings screen (some makers remove them): on to the next step
             Log.w("VIZORA", "setup step $step: ${e.message}")
+            vzSay("שלב $step נכשל (${e.javaClass.simpleName}), ממשיך")
             vzBusy = false
             next(step + 1)
             window.decorView.postDelayed({ vzSetup() }, 300)
