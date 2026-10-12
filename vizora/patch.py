@@ -34,7 +34,7 @@ def patch(path, anchor, insert, after=False):
 patch(KT, '        flutterMethodChannel = MethodChannel(\n', '''        // VIZORA: a permanent password handed over by the VIZORA player app (VIZORA Remote was closed)
         vzKeep(intent)
 ''')
-patch(KT, '    override fun onResume() {\n', '''    // VIZORA: the same handover when VIZORA Remote was already open
+patch(KT, '    override fun onResume() {\n', r'''    // VIZORA: the same handover when VIZORA Remote was already open
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
