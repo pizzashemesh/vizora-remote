@@ -103,16 +103,23 @@ patch(DART, '''  fetchID() async {
     if (isAndroid) {
       try {
         final pw = await platformFFI.invokeMethod("vz_take_password");
-        var pwSet = false;
         if (pw is String && pw.isNotEmpty) {
-          pwSet = await bind.mainSetPermanentPasswordWithResult(password: pw);
+          if (await bind.mainSetPermanentPasswordWithResult(password: pw)) {
+            _vzPwSet = true;
+          }
         }
         if (id.isNotEmpty) {
-          await platformFFI.invokeMethod("vz_report_id", pwSet ? "$id|pw" : id);
+          await platformFFI.invokeMethod("vz_report_id", _vzPwSet ? "$id|pw" : id);
+          _vzPwSet = false;
         }
       } catch (_) {}
     }
 ''', after=True)
+
+# the flag above lives on the model, so it survives until the ID is there
+patch(DART, '  fetchID() async {\n', '''  bool _vzPwSet = false; // VIZORA: the handed-over password was set, not reported yet
+
+''')
 
 # --- the setup screen: a file of its own, copied next to MainActivity, and declared in the manifest
 import os, shutil
