@@ -10,6 +10,9 @@ VIZORA Remote: the changes to RustDesk's Android app, applied at build time (the
 3. Each handover also opens VIZORA's setup screen (VizoraSetupActivity.kt): the four approvals (overlay, screen
    capture, battery, accessibility) with a live check mark each, opened one after another; it also turns on
    start-on-boot. The person approves each one on the device, and the progress shows in the VIZORA panel.
+4. VizoraEnsureReceiver.kt: the VIZORA player app asks every couple of minutes; when the service isn't running
+   (after a crash) it is started again the way RustDesk's start-on-boot does, once the setup was approved.
+5. The ID report says whether the handed-over password was really set, so the panel knows it matches.
 
 Every change is checked: if RustDesk's code changed and an anchor is missing, the build stops instead of
 producing an app without these features.
@@ -78,7 +81,9 @@ patch(KT, '                "try_sync_clipboard" -> {\n', '''                "vz_
                     try {
                         val i = Intent("com.vizora.player.REMOTE_ID")
                         i.setPackage("com.vizora.player")
-                        i.putExtra("id", call.arguments as? String ?: "")
+                        val a = call.arguments as? String ?: ""
+                        i.putExtra("id", a.substringBefore("|"))
+                        if (a.endsWith("|pw")) i.putExtra("pw", true) // the password was just set
                         sendBroadcast(i)
                     } catch (e: Exception) {
                         Log.w("VIZORA", "could not report the ID: ${e.message}")
@@ -98,22 +103,34 @@ patch(DART, '''  fetchID() async {
     if (isAndroid) {
       try {
         final pw = await platformFFI.invokeMethod("vz_take_password");
+        var pwSet = false;
         if (pw is String && pw.isNotEmpty) {
-          await bind.mainSetPermanentPasswordWithResult(password: pw);
+          pwSet = await bind.mainSetPermanentPasswordWithResult(password: pw);
         }
-        if (id.isNotEmpty) await platformFFI.invokeMethod("vz_report_id", id);
+        if (id.isNotEmpty) {
+          await platformFFI.invokeMethod("vz_report_id", pwSet ? "$id|pw" : id);
+        }
       } catch (_) {}
     }
 ''', after=True)
 
 # --- the setup screen: a file of its own, copied next to MainActivity, and declared in the manifest
 import os, shutil
-shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'VizoraSetupActivity.kt'), os.path.dirname(KT))
+for f in ('VizoraSetupActivity.kt', 'VizoraEnsureReceiver.kt'):
+    shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), f), os.path.dirname(KT))
 patch('flutter/android/app/src/main/AndroidManifest.xml', '    </application>\n', '''        <!-- VIZORA: the remote-support setup screen -->
         <activity
             android:name="com.carriez.flutter_hbb.VizoraSetupActivity"
             android:exported="false"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <!-- VIZORA: the VIZORA player app asks to bring the service back after a crash -->
+        <receiver
+            android:name="com.carriez.flutter_hbb.VizoraEnsureReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.vizora.remote.ENSURE" />
+            </intent-filter>
+        </receiver>
 ''')
 
 print('VIZORA patch applied')
