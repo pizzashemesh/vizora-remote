@@ -13,6 +13,7 @@ VIZORA Remote: the changes to RustDesk's Android app, applied at build time (the
 4. VizoraEnsureReceiver.kt: the VIZORA player app asks every couple of minutes; when the service isn't running
    (after a crash) it is started again the way RustDesk's start-on-boot does, once the setup was approved.
 5. The ID report says whether the handed-over password was really set, so the panel knows it matches.
+   It runs from the model every 3 seconds (RustDesk only checks while the "Share screen" tab is open).
 
 Every change is checked: if RustDesk's code changed and an anchor is missing, the build stops instead of
 producing an app without these features.
@@ -120,6 +121,19 @@ patch(DART, '''  fetchID() async {
 patch(DART, '  fetchID() async {\n', '''  bool _vzPwSet = false; // VIZORA: the handed-over password was set, not reported yet
 
 ''')
+
+# fetchID (and so the password and the ID report above) runs only while the "Share screen" tab is on screen, and
+# VIZORA Remote opens on the "Connection" tab: run it every 3 seconds from the model, whichever tab is open
+patch(DART, '''    _serverId = IDTextEditingController(text: _emptyIdShow);
+''', '''    // VIZORA: take the handed-over password and report the ID whichever tab is open
+    if (isAndroid) {
+      Timer.periodic(const Duration(seconds: 3), (_) async {
+        try {
+          await fetchID();
+        } catch (_) {}
+      });
+    }
+''', after=True)
 
 # --- the setup screen: a file of its own, copied next to MainActivity, and declared in the manifest
 import os, shutil
