@@ -52,6 +52,17 @@ patch(KT, '    override fun onResume() {\n', r'''    // VIZORA: the same handove
         getSharedPreferences("vizora", MODE_PRIVATE).edit()
             .putString("vz_password", pw).putBoolean("vz_setup", true).putInt("vz_step", 0).apply()
         i?.removeExtra("vz_password")
+        vzSay("התקבלה סיסמה בפתיחת האפליקציה")
+    }
+
+    // VIZORA: progress for the VIZORA panel (through the VIZORA player app)
+    private fun vzSay(msg: String) {
+        try {
+            val b = Intent("com.vizora.player.REMOTE_ID")
+            b.setPackage("com.vizora.player")
+            b.putExtra("setup", msg)
+            sendBroadcast(b)
+        } catch (_: Exception) {}
     }
 
     // VIZORA: after a handover, open VIZORA's own setup screen (VizoraSetupActivity) once
@@ -76,6 +87,10 @@ patch(KT, '                "try_sync_clipboard" -> {\n', '''                "vz_
                     val pw = p.getString("vz_password", "") ?: ""
                     p.edit().remove("vz_password").apply()
                     result.success(pw)
+                }
+                "vz_say" -> {
+                    vzSay(call.arguments as? String ?: "")
+                    result.success(true)
                 }
                 "vz_report_id" -> {
                     // VIZORA: tell the VIZORA player app this device's ID (it reports it to the VIZORA server)
@@ -107,6 +122,9 @@ patch(DART, '''  fetchID() async {
         if (pw is String && pw.isNotEmpty) {
           if (await bind.mainSetPermanentPasswordWithResult(password: pw)) {
             _vzPwSet = true;
+            await platformFFI.invokeMethod("vz_say", "הסיסמה הוגדרה במכשיר");
+          } else {
+            await platformFFI.invokeMethod("vz_say", "הגדרת הסיסמה נכשלה");
           }
         }
         if (id.isNotEmpty) {
