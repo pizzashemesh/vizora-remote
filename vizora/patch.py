@@ -14,6 +14,7 @@ VIZORA Remote: the changes to RustDesk's Android app, applied at build time (the
    (after a crash) it is started again the way RustDesk's start-on-boot does, once the setup was approved.
 5. The ID report says whether the handed-over password was really set, so the panel knows it matches.
    It runs from the model every 3 seconds (RustDesk only checks while the "Share screen" tab is open).
+6. RustDesk's own update banner is off: it offered the official RustDesk, which doesn't know our server.
 
 Every change is checked: if RustDesk's code changed and an anchor is missing, the build stops instead of
 producing an app without these features.
@@ -151,6 +152,12 @@ patch(DART, '''    _serverId = IDTextEditingController(text: _emptyIdShow);
         } catch (_) {}
       });
     }
+''', after=True)
+
+# RustDesk's own update check offers the official RustDesk download, which doesn't know our server:
+# VIZORA Remote is updated only by the VIZORA player app
+patch('flutter/lib/common.dart', 'void checkUpdate() {\n', '''  // VIZORA: no "new version" banner; the VIZORA player app installs VIZORA Remote's updates
+  return;
 ''', after=True)
 
 # --- the setup screen: a file of its own, copied next to MainActivity, and declared in the manifest
